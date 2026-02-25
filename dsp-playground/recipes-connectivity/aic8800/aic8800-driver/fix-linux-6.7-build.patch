@@ -1,0 +1,69 @@
+From 222652246693099640eac52f49a6dda1b9bc1ceb Mon Sep 17 00:00:00 2001
+From: abblancodos <abblancodos@gmail.com>
+Date: Mon, 23 Feb 2026 23:48:29 -0600
+Subject: [PATCH] fix-linux-6.7-build: apply for mainline Linux
+
+---
+ .../driver_fw/driver/aic8800/aic8800_fdrv/rwnx_rx.c | 13 +++++++++++++
+ .../driver/aic8800/aic8800_fdrv/rwnx_main.c         |  9 +++++++++
+ 2 files changed, 22 insertions(+)
+
+diff --git a/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_rx.c b/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_rx.c
+index e370a59..56dbd91 100644
+--- a/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_rx.c
++++ b/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_rx.c
+@@ -432,8 +432,21 @@ static bool rwnx_rx_data_skb(struct rwnx_hw *rwnx_hw, struct rwnx_vif *rwnx_vif,
+ 
+ 	if (amsdu) {
+ 		int count;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
++		ieee80211_amsdu_to_8023s(skb, &list, rwnx_vif->ndev->dev_addr,
++								 RWNX_VIF_TYPE(rwnx_vif), 0, NULL, NULL, 0);
++#else
++		ieee80211_amsdu_to_8023s(skb, &list, rwnx_vif->ndev->dev_addr,
++								RWNX_VIF_TYPE(rwnx_vif), 0, NULL, NULL, false);
++#endif
++#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 107) && LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0))
++		ieee80211_amsdu_to_8023s(skb, &list, rwnx_vif->ndev->dev_addr,
++								 RWNX_VIF_TYPE(rwnx_vif), 0, NULL, NULL, false);
++#else
+ 		ieee80211_amsdu_to_8023s(skb, &list, rwnx_vif->ndev->dev_addr,
+ 								 RWNX_VIF_TYPE(rwnx_vif), 0, NULL, NULL);
++#endif
+ 
+ 		count = skb_queue_len(&list);
+ 		if (count > ARRAY_SIZE(rwnx_hw->stats.amsdus_rx))
+diff --git a/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c b/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c
+index 81b1a23..cb95894 100644
+--- a/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c
++++ b/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c
+@@ -3322,8 +3322,13 @@ end:
+  * @change_beacon: Change the beacon parameters for an access point mode
+  *	interface. This should reject the call when AP mode wasn't started.
+  */
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0))
++static int rwnx_cfg80211_change_beacon(struct wiphy *wiphy, struct net_device *dev,
++									   struct cfg80211_ap_update *params)
++#else
+ static int rwnx_cfg80211_change_beacon(struct wiphy *wiphy, struct net_device *dev,
+ 									   struct cfg80211_beacon_data *info)
++#endif
+ {
+ 	struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
+ 	struct rwnx_vif *vif = netdev_priv(dev);
+@@ -3336,7 +3341,11 @@ static int rwnx_cfg80211_change_beacon(struct wiphy *wiphy, struct net_device *d
+ 	RWNX_DBG(RWNX_FN_ENTRY_STR);
+ 
+ 	// Build the beacon
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0))
++	buf = rwnx_build_bcn(bcn, &params->beacon);
++#else
+ 	buf = rwnx_build_bcn(bcn, info);
++#endif
+ 	if (!buf)
+ 		return -ENOMEM;
+ 
+-- 
+2.53.0
+

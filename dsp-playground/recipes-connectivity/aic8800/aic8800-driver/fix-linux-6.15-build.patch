@@ -1,0 +1,450 @@
+From d9e8ddcf8e727cd4e87c8bfe2205c60887e7cc6d Mon Sep 17 00:00:00 2001
+From: abblancodos <abblancodos@gmail.com>
+Date: Mon, 23 Feb 2026 23:48:30 -0600
+Subject: [PATCH] fix-linux-6.15-build: apply for mainline Linux
+
+---
+ .../driver/aic8800/aic8800_fdrv/aicwf_tcp_ack.c  | 16 ++++++++++++++++
+ .../driver/aic8800/aic8800_fdrv/rwnx_main.c      |  8 ++++++++
+ .../driver/aic8800/aic8800_fdrv/rwnx_rx.c        | 16 ++++++++++++++++
+ .../driver/aic8800/aic8800_bsp/aicsdio.c         |  4 ++++
+ .../driver/aic8800/aic8800_fdrv/aicwf_sdio.c     |  4 ++++
+ .../driver/aic8800/aic8800_fdrv/aicwf_tcp_ack.c  | 16 ++++++++++++++++
+ .../driver/aic8800/aic8800_fdrv/rwnx_main.c      |  8 ++++++++
+ .../driver/aic8800/aic8800_fdrv/rwnx_rx.c        | 16 ++++++++++++++++
+ .../drivers/aic8800/aic8800_fdrv/aicwf_tcp_ack.c | 16 ++++++++++++++++
+ .../drivers/aic8800/aic8800_fdrv/rwnx_main.c     |  8 ++++++++
+ .../drivers/aic8800/aic8800_fdrv/rwnx_rx.c       | 16 ++++++++++++++++
+ 11 files changed, 128 insertions(+)
+
+diff --git a/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/aicwf_tcp_ack.c b/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/aicwf_tcp_ack.c
+index 4ee7e64..cfec217 100644
+--- a/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/aicwf_tcp_ack.c
++++ b/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/aicwf_tcp_ack.c
+@@ -115,7 +115,11 @@ void tcp_ack_deinit(struct rwnx_hw *priv)
+ 		drop_msg = NULL;
+ 
+ 		write_seqlock_bh(&ack_m->ack_info[i].seqlock);
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++		timer_delete(&ack_m->ack_info[i].timer);
++#else
+ 		del_timer(&ack_m->ack_info[i].timer);
++#endif
+ 		drop_msg = ack_m->ack_info[i].msgbuf;
+ 		ack_m->ack_info[i].msgbuf = NULL;
+ 		write_sequnlock_bh(&ack_m->ack_info[i].seqlock);
+@@ -388,7 +392,11 @@ int tcp_ack_handle(struct msg_buf *new_msgbuf,
+ 				//printk("%lx \n",ack_info->msgbuf);
+ 				drop_msg = ack_info->msgbuf;
+ 				ack_info->msgbuf = NULL;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++				timer_delete(&ack_info->timer);
++#else
+ 				del_timer(&ack_info->timer);
++#endif
+ 			}else{
+ 				//printk("msgbuf is NULL \n");
+ 			}
+@@ -422,7 +430,11 @@ int tcp_ack_handle(struct msg_buf *new_msgbuf,
+ 				   atomic_read(&ack_m->max_drop_cnt)))) {
+ 			ack_info->drop_cnt = 0;
+ 			ack_info->in_send_msg = new_msgbuf;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++			timer_delete(&ack_info->timer);
++#else
+ 			del_timer(&ack_info->timer);
++#endif
+ 		} else {
+ 			ret = 1;
+ 			ack_info->msgbuf = new_msgbuf;
+@@ -486,7 +498,11 @@ int tcp_ack_handle_new(struct msg_buf *new_msgbuf,
+ 			ack_info->drop_cnt = 0;
+ 			//send_msg = new_msgbuf;
+ 			ack_info->in_send_msg = new_msgbuf;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++			timer_delete(&ack_info->timer);
++#else
+ 			del_timer(&ack_info->timer);
++#endif
+ 			if(drop_msg) {
+ 			write_seqlock_bh(&rwnx_hw->txdata_reserved_seqlock);
+ 			rwnx_hw->txdata_reserved--;
+diff --git a/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c b/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c
+index edd70bb..4b51915 100644
+--- a/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c
++++ b/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c
+@@ -2184,7 +2184,11 @@ static void rwnx_cfgp2p_stop_p2p_device(struct wiphy *wiphy, struct wireless_dev
+ 	if (rwnx_vif == rwnx_hw->p2p_dev_vif) {
+ 		rwnx_hw->is_p2p_alive = 0;
+ 		if (timer_pending(&rwnx_hw->p2p_alive_timer)) {
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++			timer_delete_sync(&rwnx_hw->p2p_alive_timer);
++#else
+ 			del_timer_sync(&rwnx_hw->p2p_alive_timer);
++#endif
+ 		}
+ 
+ 		if (rwnx_vif->up) {
+@@ -5863,7 +5867,11 @@ void rwnx_cfg80211_deinit(struct rwnx_hw *rwnx_hw)
+ 		list_for_each_entry(defrag_ctrl, &rwnx_hw->defrag_list, list) {
+ 			list_del_init(&defrag_ctrl->list);
+ 			if (timer_pending(&defrag_ctrl->defrag_timer))
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++				timer_delete_sync(&defrag_ctrl->defrag_timer);
++#else
+ 				del_timer_sync(&defrag_ctrl->defrag_timer);
++#endif
+ 			dev_kfree_skb(defrag_ctrl->skb);
+ 			kfree(defrag_ctrl);
+ 		}
+diff --git a/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_rx.c b/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_rx.c
+index 56dbd91..4df6137 100644
+--- a/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_rx.c
++++ b/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_rx.c
+@@ -1759,7 +1759,11 @@ int reord_flush_tid(struct aicwf_rx_priv *rx_priv, struct sk_buff *skb, u8 tid)
+ 	preorder_ctrl->enable = false;
+ 	spin_unlock_irqrestore(&preorder_ctrl->reord_list_lock, flags);
+ 	if (timer_pending(&preorder_ctrl->reord_timer))
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++		ret = timer_delete_sync(&preorder_ctrl->reord_timer);
++#else
+ 		ret = del_timer_sync(&preorder_ctrl->reord_timer);
++#endif
+ 	cancel_work_sync(&preorder_ctrl->reord_timer_work);
+ 
+ 	return 0;
+@@ -1790,7 +1794,11 @@ void reord_deinit_sta(struct aicwf_rx_priv *rx_priv, struct reord_ctrl_info *reo
+ 		}
+ 		spin_unlock_irqrestore(&preorder_ctrl->reord_list_lock, flags);
+ 		if (timer_pending(&preorder_ctrl->reord_timer)) {
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++			ret = timer_delete_sync(&preorder_ctrl->reord_timer);
++#else
+ 			ret = del_timer_sync(&preorder_ctrl->reord_timer);
++#endif
+ 		}
+ 		cancel_work_sync(&preorder_ctrl->reord_timer_work);
+ 	}
+@@ -2122,7 +2130,11 @@ int reord_process_unit(struct aicwf_rx_priv *rx_priv, struct sk_buff *skb, u16 s
+ 		}
+ 	} else {
+ 	if (timer_pending(&preorder_ctrl->reord_timer)) {
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++			ret = timer_delete(&preorder_ctrl->reord_timer);
++#else
+ 			ret = del_timer(&preorder_ctrl->reord_timer);
++#endif
+ 	}
+ 	}
+ 	
+@@ -2612,7 +2624,11 @@ check_len_update:
+ 							skb_tmp = defrag_info->skb;
+ 							list_del_init(&defrag_info->list);
+ 							if (timer_pending(&defrag_info->defrag_timer)) {
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++								ret = timer_delete(&defrag_info->defrag_timer);
++#else
+ 								ret = del_timer(&defrag_info->defrag_timer);
++#endif
+ 							}
+ 							kfree(defrag_info);
+ 							spin_unlock_bh(&rwnx_hw->defrag_lock);
+diff --git a/src/SDIO/driver_fw/driver/aic8800/aic8800_bsp/aicsdio.c b/src/SDIO/driver_fw/driver/aic8800/aic8800_bsp/aicsdio.c
+index 813c0f3..77df3e2 100644
+--- a/src/SDIO/driver_fw/driver/aic8800/aic8800_bsp/aicsdio.c
++++ b/src/SDIO/driver_fw/driver/aic8800/aic8800_bsp/aicsdio.c
+@@ -1592,7 +1592,11 @@ void aicwf_sdio_pwrctl_timer(struct aic_sdio_dev *sdiodev, uint duration)
+ 	spin_lock_bh(&sdiodev->pwrctl_lock);
+ 	if (!duration) {
+ 		if (timer_pending(&sdiodev->timer))
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++			timer_delete_sync(&sdiodev->timer);
++#else
+ 			del_timer_sync(&sdiodev->timer);
++#endif
+ 	} else {
+ 		sdiodev->active_duration = duration;
+ 		timeout = msecs_to_jiffies(sdiodev->active_duration);
+diff --git a/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/aicwf_sdio.c b/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/aicwf_sdio.c
+index 57a14d0..8972de5 100644
+--- a/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/aicwf_sdio.c
++++ b/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/aicwf_sdio.c
+@@ -2924,7 +2924,11 @@ void aicwf_sdio_pwrctl_timer(struct aic_sdio_dev *sdiodev, uint duration)
+ 	spin_lock_bh(&sdiodev->pwrctl_lock);
+ 	if (!duration) {
+ 		if (timer_pending(&sdiodev->timer))
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++			timer_delete_sync(&sdiodev->timer);
++#else
+ 			del_timer_sync(&sdiodev->timer);
++#endif
+ 	} else {
+ 		sdiodev->active_duration = duration;
+ 		timeout = msecs_to_jiffies(sdiodev->active_duration);
+diff --git a/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/aicwf_tcp_ack.c b/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/aicwf_tcp_ack.c
+index ca47b26..d74bd8d 100644
+--- a/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/aicwf_tcp_ack.c
++++ b/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/aicwf_tcp_ack.c
+@@ -106,7 +106,11 @@ void tcp_ack_deinit(struct rwnx_hw *priv)
+ 		drop_msg = NULL;
+ 
+ 		write_seqlock_bh(&ack_m->ack_info[i].seqlock);
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++		timer_delete(&ack_m->ack_info[i].timer);
++#else
+ 		del_timer(&ack_m->ack_info[i].timer);
++#endif
+ 		drop_msg = ack_m->ack_info[i].msgbuf;
+ 		ack_m->ack_info[i].msgbuf = NULL;
+ 		write_sequnlock_bh(&ack_m->ack_info[i].seqlock);
+@@ -375,7 +379,11 @@ int tcp_ack_handle(struct msg_buf *new_msgbuf,
+ 				//printk("%lx \n",ack_info->msgbuf);
+ 				drop_msg = ack_info->msgbuf;
+ 				ack_info->msgbuf = NULL;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++				timer_delete(&ack_info->timer);
++#else
+ 				del_timer(&ack_info->timer);
++#endif
+ 			}else{
+ 				//printk("msgbuf is NULL \n");
+ 			}
+@@ -409,7 +417,11 @@ int tcp_ack_handle(struct msg_buf *new_msgbuf,
+ 				   atomic_read(&ack_m->max_drop_cnt)))) {
+ 			ack_info->drop_cnt = 0;
+ 			ack_info->in_send_msg = new_msgbuf;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++			timer_delete(&ack_info->timer);
++#else
+ 			del_timer(&ack_info->timer);
++#endif
+ 		} else {
+ 			ret = 1;
+ 			ack_info->msgbuf = new_msgbuf;
+@@ -472,7 +484,11 @@ int tcp_ack_handle_new(struct msg_buf *new_msgbuf,
+ 			ack_info->drop_cnt = 0;
+ 			//send_msg = new_msgbuf;
+ 			ack_info->in_send_msg = new_msgbuf;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++			timer_delete(&ack_info->timer);
++#else
+ 			del_timer(&ack_info->timer);
++#endif
+ 		}else{
+ 			ret = 1;
+ 			ack_info->msgbuf = new_msgbuf;
+diff --git a/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c b/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c
+index 4e9c07c..55efcaf 100644
+--- a/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c
++++ b/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c
+@@ -2100,7 +2100,11 @@ static void rwnx_cfgp2p_stop_p2p_device(struct wiphy *wiphy, struct wireless_dev
+ 	if (rwnx_vif == rwnx_hw->p2p_dev_vif) {
+ 		rwnx_hw->is_p2p_alive = 0;
+ 		if (timer_pending(&rwnx_hw->p2p_alive_timer)) {
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++			timer_delete_sync(&rwnx_hw->p2p_alive_timer);
++#else
+ 			del_timer_sync(&rwnx_hw->p2p_alive_timer);
++#endif
+ 		}
+ 
+ 		if (rwnx_vif->up) {
+@@ -5950,7 +5954,11 @@ void rwnx_cfg80211_deinit(struct rwnx_hw *rwnx_hw)
+ 		list_for_each_entry(defrag_ctrl, &rwnx_hw->defrag_list, list) {
+ 			list_del_init(&defrag_ctrl->list);
+ 			if (timer_pending(&defrag_ctrl->defrag_timer))
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++				timer_delete_sync(&defrag_ctrl->defrag_timer);
++#else
+ 				del_timer_sync(&defrag_ctrl->defrag_timer);
++#endif
+ 			dev_kfree_skb(defrag_ctrl->skb);
+ 			kfree(defrag_ctrl);
+ 		}
+diff --git a/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_rx.c b/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_rx.c
+index d5b2f63..6a6ec56 100644
+--- a/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_rx.c
++++ b/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_rx.c
+@@ -1417,7 +1417,11 @@ int reord_flush_tid(struct aicwf_rx_priv *rx_priv, struct sk_buff *skb, u8 tid)
+ 	preorder_ctrl->enable = false;
+ 	spin_unlock_irqrestore(&preorder_ctrl->reord_list_lock, flags);
+ 	if (timer_pending(&preorder_ctrl->reord_timer))
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++		ret = timer_delete_sync(&preorder_ctrl->reord_timer);
++#else
+ 		ret = del_timer_sync(&preorder_ctrl->reord_timer);
++#endif
+ 	cancel_work_sync(&preorder_ctrl->reord_timer_work);
+ 
+ 	return 0;
+@@ -1442,7 +1446,11 @@ void reord_deinit_sta(struct aicwf_rx_priv *rx_priv, struct reord_ctrl_info *reo
+ 		if(preorder_ctrl->enable){
+ 			preorder_ctrl->enable = false;
+ 			if (timer_pending(&preorder_ctrl->reord_timer)) {
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++ 				ret = timer_delete_sync(&preorder_ctrl->reord_timer);
++#else
+ 				ret = del_timer_sync(&preorder_ctrl->reord_timer);
++#endif
+ 			}
+ 			cancel_work_sync(&preorder_ctrl->reord_timer_work);
+ 		}
+@@ -1804,7 +1812,11 @@ int reord_process_unit(struct aicwf_rx_priv *rx_priv, struct sk_buff *skb, u16 s
+ 		}
+ 	} else {
+ 	if (timer_pending(&preorder_ctrl->reord_timer)) {
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++			ret = timer_delete(&preorder_ctrl->reord_timer);
++#else
+ 			ret = del_timer(&preorder_ctrl->reord_timer);
++#endif
+ 	}
+ 	}
+ 	
+@@ -2361,7 +2373,11 @@ check_len_update:
+ 							skb_tmp = defrag_info->skb;
+ 							list_del_init(&defrag_info->list);
+ 							if (timer_pending(&defrag_info->defrag_timer)) {
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++								ret = timer_delete(&defrag_info->defrag_timer);
++#else
+ 								ret = del_timer(&defrag_info->defrag_timer);
++#endif
+ 							}
+ 							kfree(defrag_info);
+ 							spin_unlock_bh(&rwnx_hw->defrag_lock);
+diff --git a/src/USB/driver_fw/drivers/aic8800/aic8800_fdrv/aicwf_tcp_ack.c b/src/USB/driver_fw/drivers/aic8800/aic8800_fdrv/aicwf_tcp_ack.c
+index 480fd07..47f0598 100644
+--- a/src/USB/driver_fw/drivers/aic8800/aic8800_fdrv/aicwf_tcp_ack.c
++++ b/src/USB/driver_fw/drivers/aic8800/aic8800_fdrv/aicwf_tcp_ack.c
+@@ -106,7 +106,11 @@ void tcp_ack_deinit(struct rwnx_hw *priv)
+ 		drop_msg = NULL;
+ 
+ 		write_seqlock_bh(&ack_m->ack_info[i].seqlock);
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++		timer_delete(&ack_m->ack_info[i].timer);
++#else
+ 		del_timer(&ack_m->ack_info[i].timer);
++#endif
+ 		drop_msg = ack_m->ack_info[i].msgbuf;
+ 		ack_m->ack_info[i].msgbuf = NULL;
+ 		write_sequnlock_bh(&ack_m->ack_info[i].seqlock);
+@@ -375,7 +379,11 @@ int tcp_ack_handle(struct msg_buf *new_msgbuf,
+ 				//printk("%lx \n",ack_info->msgbuf);
+ 				drop_msg = ack_info->msgbuf;
+ 				ack_info->msgbuf = NULL;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++				timer_delete(&ack_info->timer);
++#else
+ 				del_timer(&ack_info->timer);
++#endif
+ 			}else{
+ 				//printk("msgbuf is NULL \n");
+ 			}
+@@ -409,7 +417,11 @@ int tcp_ack_handle(struct msg_buf *new_msgbuf,
+ 				   atomic_read(&ack_m->max_drop_cnt)))) {
+ 			ack_info->drop_cnt = 0;
+ 			ack_info->in_send_msg = new_msgbuf;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++			timer_delete(&ack_info->timer);
++#else
+ 			del_timer(&ack_info->timer);
++#endif
+ 		} else {
+ 			ret = 1;
+ 			ack_info->msgbuf = new_msgbuf;
+@@ -472,7 +484,11 @@ int tcp_ack_handle_new(struct msg_buf *new_msgbuf,
+ 			ack_info->drop_cnt = 0;
+ 			//send_msg = new_msgbuf;
+ 			ack_info->in_send_msg = new_msgbuf;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++			timer_delete(&ack_info->timer);
++#else
+ 			del_timer(&ack_info->timer);
++#endif
+ 		}else{
+ 			ret = 1;
+ 			ack_info->msgbuf = new_msgbuf;
+diff --git a/src/USB/driver_fw/drivers/aic8800/aic8800_fdrv/rwnx_main.c b/src/USB/driver_fw/drivers/aic8800/aic8800_fdrv/rwnx_main.c
+index 511522a..4b54ba0 100644
+--- a/src/USB/driver_fw/drivers/aic8800/aic8800_fdrv/rwnx_main.c
++++ b/src/USB/driver_fw/drivers/aic8800/aic8800_fdrv/rwnx_main.c
+@@ -2616,7 +2616,11 @@ static void rwnx_cfgp2p_stop_p2p_device(struct wiphy *wiphy, struct wireless_dev
+ 	if (rwnx_vif == rwnx_hw->p2p_dev_vif) {
+ 		rwnx_hw->is_p2p_alive = 0;
+ 		if (timer_pending(&rwnx_hw->p2p_alive_timer)) {
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++			timer_delete_sync(&rwnx_hw->p2p_alive_timer);
++#else
+ 			del_timer_sync(&rwnx_hw->p2p_alive_timer);
++#endif
+ 		}
+ 		if (rwnx_vif->up) {
+ 			rwnx_send_remove_if(rwnx_hw, rwnx_vif->vif_index, true);
+@@ -8718,7 +8722,11 @@ void rwnx_cfg80211_deinit(struct rwnx_hw *rwnx_hw)
+         list_for_each_entry(defrag_ctrl, &rwnx_hw->defrag_list, list) {
+             list_del_init(&defrag_ctrl->list);
+             if (timer_pending(&defrag_ctrl->defrag_timer))
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++                timer_delete_sync(&defrag_ctrl->defrag_timer);
++#else
+                 del_timer_sync(&defrag_ctrl->defrag_timer);
++#endif
+             dev_kfree_skb(defrag_ctrl->skb);
+             kfree(defrag_ctrl);
+         }
+diff --git a/src/USB/driver_fw/drivers/aic8800/aic8800_fdrv/rwnx_rx.c b/src/USB/driver_fw/drivers/aic8800/aic8800_fdrv/rwnx_rx.c
+index 7219a54..90add1c 100644
+--- a/src/USB/driver_fw/drivers/aic8800/aic8800_fdrv/rwnx_rx.c
++++ b/src/USB/driver_fw/drivers/aic8800/aic8800_fdrv/rwnx_rx.c
+@@ -1435,7 +1435,11 @@ int reord_flush_tid(struct aicwf_rx_priv *rx_priv, struct sk_buff *skb, u8 tid)
+     preorder_ctrl->enable = false;
+     spin_unlock_irqrestore(&preorder_ctrl->reord_list_lock, flags);
+     if (timer_pending(&preorder_ctrl->reord_timer))
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++        ret = timer_delete_sync(&preorder_ctrl->reord_timer);
++#else
+         ret = del_timer_sync(&preorder_ctrl->reord_timer);
++#endif
+     cancel_work_sync(&preorder_ctrl->reord_timer_work);
+ 
+     return 0;
+@@ -1461,7 +1465,11 @@ void reord_deinit_sta(struct aicwf_rx_priv* rx_priv, struct reord_ctrl_info *reo
+ 		if(preorder_ctrl->enable){
+ 			preorder_ctrl->enable = false;
+ 	        if (timer_pending(&preorder_ctrl->reord_timer)) {
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++	            ret = timer_delete_sync(&preorder_ctrl->reord_timer);
++#else
+ 	            ret = del_timer_sync(&preorder_ctrl->reord_timer);
++#endif
+ 	        }
+ 	        cancel_work_sync(&preorder_ctrl->reord_timer_work);
+ 		}
+@@ -1871,7 +1879,11 @@ int reord_process_unit(struct recv_msdu *pframe, struct aicwf_rx_priv *rx_priv,
+         }
+     } else {
+ 		if(timer_pending(&preorder_ctrl->reord_timer)) {
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++			ret = timer_delete(&preorder_ctrl->reord_timer);
++#else
+ 	        	ret = del_timer(&preorder_ctrl->reord_timer);
++#endif
+ 		}
+     }
+ 
+@@ -2397,7 +2409,11 @@ check_len_update:
+ 							skb_tmp = defrag_info->skb;
+ 							list_del_init(&defrag_info->list);
+ 							if (timer_pending(&defrag_info->defrag_timer)) {
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
++								ret = timer_delete(&defrag_info->defrag_timer);
++#else
+ 								ret = del_timer(&defrag_info->defrag_timer);
++#endif
+ 							}
+ 							kfree(defrag_info);
+ 							spin_unlock_bh(&rwnx_hw->defrag_lock);
+-- 
+2.53.0
+

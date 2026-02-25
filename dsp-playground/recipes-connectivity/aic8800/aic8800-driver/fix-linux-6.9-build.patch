@@ -1,0 +1,61 @@
+From bd8dd92a2c8e4a1efdeeb33e22bedcbd9a310e16 Mon Sep 17 00:00:00 2001
+From: abblancodos <abblancodos@gmail.com>
+Date: Mon, 23 Feb 2026 23:48:30 -0600
+Subject: [PATCH] fix-linux-6.9-build: apply for mainline Linux
+
+---
+ .../driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c     | 7 +++++++
+ .../driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c     | 8 ++++++--
+ 2 files changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c b/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c
+index a4d3b4e..2954f07 100644
+--- a/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c
++++ b/src/PCIE/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c
+@@ -505,10 +505,17 @@ static const int rwnx_hwq2uapsd[NL80211_NUM_ACS] = {
+ #define P2P_ALIVE_TIME_MS       (1*1000)
+ #define P2P_ALIVE_TIME_COUNT    200
+ 
++//because android kernel 5.15 uses kernel 6.0 or 6.1 kernel api
+ #ifdef ANDROID_PLATFORM
+ #define HIGH_KERNEL_VERSION KERNEL_VERSION(5, 15, 41)
++#define HIGH_KERNEL_VERSION2 KERNEL_VERSION(5, 15, 41)
++#define HIGH_KERNEL_VERSION3 KERNEL_VERSION(5, 15, 104)
++#define HIGH_KERNEL_VERSION4 KERNEL_VERSION(6, 1, 0)
+ #else
+ #define HIGH_KERNEL_VERSION KERNEL_VERSION(6, 0, 0)
++#define HIGH_KERNEL_VERSION2 KERNEL_VERSION(6, 1, 0)
++#define HIGH_KERNEL_VERSION3 KERNEL_VERSION(6, 3, 0)
++#define HIGH_KERNEL_VERSION4 KERNEL_VERSION(6, 3, 0)
+ #endif
+ 
+ extern uint8_t scanning;
+diff --git a/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c b/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c
+index cb95894..961fe7d 100644
+--- a/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c
++++ b/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c
+@@ -787,7 +787,9 @@ static void rwnx_csa_finish(struct work_struct *ws)
+ 		} else
+ 			rwnx_txq_vif_stop(vif, RWNX_TXQ_STOP_CHAN, rwnx_hw);
+ 		spin_unlock_bh(&rwnx_hw->cb_lock);
+-#if (LINUX_VERSION_CODE >= HIGH_KERNEL_VERSION3)
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0))
++		cfg80211_ch_switch_notify(vif->ndev, &csa->chandef, 0);
++#elif (LINUX_VERSION_CODE >= HIGH_KERNEL_VERSION3)
+ 		cfg80211_ch_switch_notify(vif->ndev, &csa->chandef, 0, 0);
+ #elif (LINUX_VERSION_CODE >= HIGH_KERNEL_VERSION)
+ 		cfg80211_ch_switch_notify(vif->ndev, &csa->chandef, 0);
+@@ -4163,7 +4165,9 @@ int rwnx_cfg80211_channel_switch (struct wiphy *wiphy,
+ 		goto end;
+ 	} else {
+ 		INIT_WORK(&csa->work, rwnx_csa_finish);
+-#if LINUX_VERSION_CODE >= HIGH_KERNEL_VERSION4
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0))
++		cfg80211_ch_switch_started_notify(dev, &csa->chandef, 0, params->count, false);
++#elif LINUX_VERSION_CODE >= HIGH_KERNEL_VERSION4
+ 		cfg80211_ch_switch_started_notify(dev, &csa->chandef, 0, params->count, false, 0);
+ #elif LINUX_VERSION_CODE >= HIGH_KERNEL_VERSION2
+ 		cfg80211_ch_switch_started_notify(dev, &csa->chandef, 0, params->count, false);
+-- 
+2.53.0
+

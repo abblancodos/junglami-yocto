@@ -1,0 +1,239 @@
+From ff24dd61712bbba474403e059b79fe1c9ee73b23 Mon Sep 17 00:00:00 2001
+From: abblancodos <abblancodos@gmail.com>
+Date: Mon, 23 Feb 2026 22:36:15 -0600
+Subject: [PATCH] mainline: replace rfkill-wlan Android header with inline
+ stubs
+
+---
+ .../driver/aic8800/aic8800_bsp/aicsdio.c      | 81 ++++++++++---------
+ .../driver/aic8800/aic8800_fdrv/aicwf_sdio.c  |  4 +-
+ .../driver/aic8800/aic8800_fdrv/rwnx_main.c   |  4 +-
+ .../driver/aic8800/rfkill-wlan-stub.h         | 44 ++++++++++
+ 4 files changed, 93 insertions(+), 40 deletions(-)
+ create mode 100644 src/SDIO/driver_fw/driver/aic8800/rfkill-wlan-stub.h
+
+diff --git a/src/SDIO/driver_fw/driver/aic8800/aic8800_bsp/aicsdio.c b/src/SDIO/driver_fw/driver/aic8800/aic8800_bsp/aicsdio.c
+index 77df3e2..bf559cf 100644
+--- a/src/SDIO/driver_fw/driver/aic8800/aic8800_bsp/aicsdio.c
++++ b/src/SDIO/driver_fw/driver/aic8800/aic8800_bsp/aicsdio.c
+@@ -21,10 +21,10 @@
+ #include <linux/version.h>
+ #include <linux/delay.h>
+ #ifdef CONFIG_PLATFORM_ROCKCHIP
+-#include <linux/rfkill-wlan.h>
++#include "../rfkill-wlan-stub.h"
+ #endif /* CONFIG_PLATFORM_ROCKCHIP */
+ #ifdef CONFIG_PLATFORM_ROCKCHIP2
+-#include <linux/rfkill-wlan.h>
++#include "../rfkill-wlan-stub.h"
+ #endif /* CONFIG_PLATFORM_ROCKCHIP */
+ 
+ 
+@@ -47,6 +47,7 @@ static int aicbsp_platform_power_on(void);
+ static void aicbsp_platform_power_off(void);
+ 
+ struct aic_sdio_dev *aicbsp_sdiodev = NULL;
++struct mmc_host *g_mmc_host = NULL;
+ static struct semaphore *aicbsp_notify_semaphore;
+ extern struct semaphore aicbsp_probe_semaphore;
+ 
+@@ -198,12 +199,12 @@ int aicbsp_set_subsys(int subsys, int state)
+ //#ifndef CONFIG_PLATFORM_ROCKCHIP
+ //			aicbsp_sdio_exit();
+ //#endif
+-		} else {
+-		#ifndef CONFIG_PLATFORM_ROCKCHIP
+-			aicbsp_sdio_exit();
++	} else {
++		#if !defined(CONFIG_PLATFORM_ROCKCHIP) && !defined(CONFIG_PLATFORM_ROCKCHIP2)
++						aicbsp_sdio_exit();
+ 		#endif
+-			aicbsp_platform_power_off();
+-		}
++						aicbsp_platform_power_off();
++	}
+ 	} else {
+ 		sdio_dbg("%s, power state no need to change, current: %d\n", __func__, cur_power_state);
+ 	}
+@@ -298,6 +299,7 @@ static int aicbsp_sdio_probe(struct sdio_func *func,
+ 
+ 	host = func->card->host;
+ 	host->caps |= MMC_CAP_NONREMOVABLE;
++        g_mmc_host = host;
+ 
+ 	func = func->card->sdio_func[1 - 1]; //replace 2 with 1
+ 
+@@ -486,16 +488,19 @@ static struct sdio_driver aicbsp_sdio_driver = {
+ 
+ static int aicbsp_platform_power_on(void)
+ {
+-	int ret = 0;
+-	struct semaphore aic_chipup_sem;
+-	sdio_dbg("%s\n", __func__);
++        int ret = 0;
++        struct semaphore aic_chipup_sem;
++        sdio_dbg("%s\n", __func__);
+ 
+-#ifdef CONFIG_PLATFORM_ALLWINNER
+-	if (aicbsp_bus_index < 0)
+-		 aicbsp_bus_index = sunxi_wlan_get_bus_index();
+-	if (aicbsp_bus_index < 0)
+-		return aicbsp_bus_index;
+-#endif //CONFIG_PLATFORM_ALLWINNER
++#ifdef CONFIG_PLATFORM_ROCKCHIP2
++        /* On mainline kernels, non-removable SDIO cards cannot be
++         * re-enumerated. If the device is already probed, skip the
++         * chipup semaphore wait entirely. */
++        if (aicbsp_sdiodev != NULL) {
++                sdio_dbg("%s: sdiodev already present, skipping chipup wait\n", __func__);
++                return 0;
++        }
++#endif
+ 
+ #ifdef CONFIG_PLATFORM_AMLOGIC
+ 		extern_wifi_set_enable(0);
+@@ -511,16 +516,17 @@ static int aicbsp_platform_power_on(void)
+             mdelay(50);
+             rockchip_wifi_power(1);
+             mdelay(50);
++#endif /*CONFIG_PLATFORM_ROCKCHIP2*/
++        sema_init(&aic_chipup_sem, 0);
++        ret = aicbsp_reg_sdio_notify(&aic_chipup_sem);
++        if (ret) {
++                sdio_dbg("%s aicbsp_reg_sdio_notify fail(%d)\n", __func__, ret);
++                return ret;
++        }
++#ifdef CONFIG_PLATFORM_ROCKCHIP2
+             rockchip_wifi_set_carddetect(1);
+ #endif /*CONFIG_PLATFORM_ROCKCHIP2*/
+ 
+-	sema_init(&aic_chipup_sem, 0);
+-	ret = aicbsp_reg_sdio_notify(&aic_chipup_sem);
+-	if (ret) {
+-		sdio_dbg("%s aicbsp_reg_sdio_notify fail(%d)\n", __func__, ret);
+-			return ret;
+-	}
+-
+ #ifdef CONFIG_PLATFORM_ALLWINNER
+ 	sunxi_wlan_set_power(0);
+ 	mdelay(50);
+@@ -587,19 +593,22 @@ static void aicbsp_platform_power_off(void)
+ 
+ int aicbsp_sdio_init(void)
+ {
+-
+-	if (sdio_register_driver(&aicbsp_sdio_driver)) {
+-		return -1;
+-	} else {
+-		//may add mmc_rescan here
+-	}
+-	if (down_timeout(&aicbsp_probe_semaphore, msecs_to_jiffies(2000)) != 0){
+-		printk("%s aicbsp_sdio_probe fail\r\n", __func__);
+-		return -1;
+-	}
+-
+-	
+-	return 0;
++#ifdef CONFIG_PLATFORM_ROCKCHIP2
++        if (aicbsp_sdiodev != NULL) {
++                sdio_dbg("%s: sdiodev already present, skipping register\n", __func__);
++                return 0;
++        }
++#endif
++        if (sdio_register_driver(&aicbsp_sdio_driver)) {
++                return -1;
++        } else {
++                //may add mmc_rescan here
++        }
++        if (down_timeout(&aicbsp_probe_semaphore, msecs_to_jiffies(2000)) != 0){
++                printk("%s aicbsp_sdio_probe fail\r\n", __func__);
++                return -1;
++        }
++        return 0;
+ }
+ 
+ void aicbsp_sdio_exit(void)
+diff --git a/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/aicwf_sdio.c b/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/aicwf_sdio.c
+index 8972de5..6235c06 100644
+--- a/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/aicwf_sdio.c
++++ b/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/aicwf_sdio.c
+@@ -34,10 +34,10 @@
+ #include "mach/jzmmc.h"
+ #endif /* CONFIG_INGENIC_T20 */
+ #ifdef CONFIG_PLATFORM_ROCKCHIP
+-#include <linux/rfkill-wlan.h>
++#include "../rfkill-wlan-stub.h"
+ #endif
+ #ifdef CONFIG_PLATFORM_ROCKCHIP2
+-#include <linux/rfkill-wlan.h>
++#include "../rfkill-wlan-stub.h"
+ #endif
+ 
+ #include "aic_bsp_export.h"
+diff --git a/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c b/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c
+index 55efcaf..ebaacf9 100644
+--- a/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c
++++ b/src/SDIO/driver_fw/driver/aic8800/aic8800_fdrv/rwnx_main.c
+@@ -5428,10 +5428,10 @@ extern int get_wifi_custom_mac_address(char *addr_str);
+ #endif//CONFIG_PLATFORM_ALLWINNER
+ 
+ #ifdef CONFIG_PLATFORM_ROCKCHIP
+-#include <linux/rfkill-wlan.h>
++#include "../rfkill-wlan-stub.h"
+ #endif
+ #ifdef CONFIG_PLATFORM_ROCKCHIP2
+-#include <linux/rfkill-wlan.h>
++#include "../rfkill-wlan-stub.h"
+ #endif
+ 
+ #ifdef CONFIG_USE_CUSTOMER_MAC
+diff --git a/src/SDIO/driver_fw/driver/aic8800/rfkill-wlan-stub.h b/src/SDIO/driver_fw/driver/aic8800/rfkill-wlan-stub.h
+new file mode 100644
+index 0000000..55995b1
+--- /dev/null
++++ b/src/SDIO/driver_fw/driver/aic8800/rfkill-wlan-stub.h
+@@ -0,0 +1,44 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef __RFKILL_WLAN_STUB_H
++#define __RFKILL_WLAN_STUB_H
++
++#include <linux/printk.h>
++#include <linux/mmc/host.h>
++#include <linux/mmc/sdio_func.h>
++#include <linux/delay.h>
++
++extern struct mmc_host *g_mmc_host;
++
++static inline int rockchip_wifi_power(int on)
++{
++    pr_info("[rfkill-wlan-stub] rockchip_wifi_power(%d) called from %pS\n",
++        on, __builtin_return_address(0));
++    return 0;
++}
++
++static inline int rockchip_wifi_set_carddetect(int val)
++{
++    pr_info("[rfkill-wlan-stub] rockchip_wifi_set_carddetect(%d) called from %pS\n",
++        val, __builtin_return_address(0));
++    if (val && g_mmc_host) {
++        pr_info("[rfkill-wlan-stub] triggering mmc_detect_change\n");
++        mmc_detect_change(g_mmc_host, msecs_to_jiffies(50));
++    }
++    return 0;
++}
++
++static inline int rockchip_wifi_get_oob_irq(void)
++{
++    pr_info("[rfkill-wlan-stub] rockchip_wifi_get_oob_irq() called from %pS\n",
++        __builtin_return_address(0));
++    return -1;
++}
++
++static inline int rockchip_wifi_mac_addr(unsigned char *buf)
++{
++    pr_info("[rfkill-wlan-stub] rockchip_wifi_mac_addr() called from %pS\n",
++        __builtin_return_address(0));
++    return -1;
++}
++
++#endif /* __RFKILL_WLAN_STUB_H */
