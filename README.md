@@ -16,15 +16,14 @@ A custom Yocto BSP layer for the Radxa Zero 3W (Rockchip RK3566), targeting embe
 
 ```
 junglami-yocto/
-├── meta-dsp-playground/
-│   ├── conf/
-│   │   └── layer.conf
-│   ├── recipes-bsp/
-│   │   └── u-boot/          # U-Boot bbappend for Radxa Zero 3W
-│   ├── recipes-connectivity/
-│   │   └── aic8800/         # Out-of-tree AIC8800 WiFi/BT driver
-│   └── recipes-kernel/
-│       └── linux/           # Kernel bbappend + defconfig
+├── conf/
+│   └── layer.conf
+├── recipes-bsp/
+│   └── u-boot/          # U-Boot bbappend for Radxa Zero 3W
+├── recipes-connectivity/
+│   └── aic8800/         # Out-of-tree AIC8800 WiFi/BT driver
+└── recipes-kernel/
+    └── linux/           # Kernel recipe + defconfig
 ```
 
 ---
@@ -194,7 +193,7 @@ cd poky-radxa/poky
 source oe-init-build-env build
 
 # Add layer
-bitbake-layers add-layer ../../junglami-yocto/meta-dsp-playground
+bitbake-layers add-layer ../../junglami-yocto
 
 # Build
 bitbake core-image-base
