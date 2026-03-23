@@ -1,0 +1,13 @@
+[Unit]
+Description=Junglami radxactl system daemon
+After=bluetooth.service NetworkManager.service pipewire.service
+Wants=bluetooth.service NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/radxactl daemon
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

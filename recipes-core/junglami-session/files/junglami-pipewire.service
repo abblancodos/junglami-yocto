@@ -1,0 +1,21 @@
+[Unit]
+Description=Junglami PipeWire + WirePlumber session
+After=bluetooth-init.service bluetooth.service
+Wants=bluetooth.service
+
+[Service]
+Type=simple
+User=junglami
+Environment=XDG_RUNTIME_DIR=/run/user/4242
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/4242/bus
+ExecStartPre=/usr/bin/mkdir -p /run/user/4242
+ExecStartPre=/usr/bin/chown junglami:junglami /run/user/4242
+ExecStartPre=/usr/bin/chmod 700 /run/user/4242
+ExecStart=/usr/bin/dbus-run-session /usr/bin/sh -c '\
+    pipewire & sleep 1; \
+    wireplumber & wait'
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

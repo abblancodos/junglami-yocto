@@ -1,0 +1,7 @@
+# Junglami OS systemd preset
+enable greetd.service
+enable seatd.service
+enable radxactl.service
+enable bluetooth-init.service
+enable junglami-pipewire.service
+disable getty@tty2.service

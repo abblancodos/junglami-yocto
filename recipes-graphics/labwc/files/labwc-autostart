@@ -1,0 +1,19 @@
+#!/bin/sh
+# Junglami OS labwc autostart
+
+export XDG_RUNTIME_DIR=/run/user/4242
+export WAYLAND_DISPLAY=wayland-0
+export LANG=C.UTF-8
+
+# Esperar socket Wayland antes de lanzar apps
+i=0
+while [ ! -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ] && [ $i -lt 20 ]; do
+    sleep 0.5
+    i=$((i + 1))
+done
+
+# Lanzar cog con la app Svelte cuando esté lista
+# cog --platform=wl file:///usr/share/junglami/index.html &
+
+# Por ahora foot como placeholder
+foot &

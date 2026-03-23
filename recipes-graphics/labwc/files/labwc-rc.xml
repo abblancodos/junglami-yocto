@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<labwc_config>
+<core>
+<gap>0</gap>
+</core>
+<keyboard>
+<!-- Super+T opens foot terminal (for debugging) -->
+<keybind key="W-t"><action name="Execute" command="foot" /></keybind>
+<!-- Super+Q closes window -->
+<keybind key="W-q"><action name="Close" /></keybind>
+<!-- Alt+F4 closes window -->
+<keybind key="A-F4"><action name="Close" /></keybind>
+</keyboard>
+<mouse>
+<context name="Root">
+<mousebind button="Right" action="Press">
+<action name="ShowMenu" menu="root-menu" />
+</mousebind>
+</context>
+</mouse>
+<windowRules>
+<!-- ES-DE starts maximized, no decorations -->
+<windowRule identifier="es-de" maximized="yes" serverDecoration="no" />
+<!-- RetroArch also fullscreen when launched by ES-DE -->
+<windowRule identifier="retroarch" maximized="yes" serverDecoration="no" />
+</windowRules>
+</labwc_config>

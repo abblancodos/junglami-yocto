@@ -1,0 +1,15 @@
+[Unit]
+Description=AIC8800 Bluetooth UART bring-up
+After=systemd-udev-settle.service
+Before=bluetooth.service
+ConditionPathExists=/dev/ttyS1
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/hciattach -s 1500000 /dev/ttyS1 any 1500000 flow nosleep
+ExecStartPost=/usr/sbin/rfkill unblock bluetooth
+ExecStartPost=/usr/bin/hciconfig hci0 up
+
+[Install]
+WantedBy=bluetooth.service

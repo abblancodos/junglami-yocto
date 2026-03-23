@@ -1,0 +1,12 @@
+[Unit]
+Description=Seat management daemon
+Documentation=man:seatd(1)
+Before=greetd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/seatd -g seat
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
